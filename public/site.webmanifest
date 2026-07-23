@@ -1,0 +1,13 @@
+{
+  "name": "EWM Mastery — SAP EWM Support & Interview Prep",
+  "short_name": "EWM Mastery",
+  "description": "Free, offline SAP EWM support incident runbooks and 630 interview Q&A.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F5F7FA",
+  "theme_color": "#1F4E79",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Design tokens — ground truth: design/design-system.dc.html
+   Light in :root, dark under [data-theme="dark"].
+   ============================================================ */
+:root {
+  /* neutrals (slate) */
+  --c-bg: #F5F7FA;          --c-surface: #FFFFFF;      --c-surface2: #EDF1F5;
+  --c-border: #D8DEE6;      --c-border-strong: #B9C3CF;
+  --c-text: #1B2733;        --c-text2: #5A6A7A;        --c-text3: #8595A5;
+  /* brand */
+  --c-primary: #1F4E79;     --c-primary-strong: #173D60;
+  --c-primary-tint: #E8F0F7; --c-on-primary: #FFFFFF;  --c-link: #1F4E79;
+  /* priority (AA as badge text on badge bg, both themes) */
+  --c-crit-bg: #FCE8E6;  --c-crit-text: #8C1D18;
+  --c-high-bg: #FDF0DE;  --c-high-text: #7A4200;
+  --c-med-bg:  #E8F0F7;  --c-med-text:  #1F4E79;
+  --c-low-bg:  #EDF1F5;  --c-low-text:  #4E5E6E;
+  /* semantic */
+  --c-ok: #1E6B44;  --c-ok-bg: #E3F2E9;
+  --c-shadow: 0 1px 2px rgba(27, 39, 51, .06);
+  /* motion — 150-200ms band; 0ms under prefers-reduced-motion */
+  --motion: 180ms ease;
+}
+
+[data-theme="dark"] {
+  --c-bg: #0E151D;          --c-surface: #161F29;      --c-surface2: #1C2733;
+  --c-border: #2C3947;      --c-border-strong: #41505F;
+  --c-text: #E8EDF3;        --c-text2: #9DACBB;        --c-text3: #71808F;
+  --c-primary: #6FA8D6;     --c-primary-strong: #8FBCE2;
+  --c-primary-tint: #1B2C3E; --c-on-primary: #0B1A28;  --c-link: #8FBCE2;
+  --c-crit-bg: #3C1512;  --c-crit-text: #FFB4AB;
+  --c-high-bg: #3A2A10;  --c-high-text: #FFC27D;
+  --c-med-bg:  #16283A;  --c-med-text:  #9CC7EC;
+  --c-low-bg:  #222D38;  --c-low-text:  #AEBDCB;
+  --c-ok: #7FCFA3;  --c-ok-bg: #12291D;
+  --c-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+}
+
+html {
+  color-scheme: light;
+}
+[data-theme="dark"] html,
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background var(--motion);
+}
+
+/* Visible focus ring on both themes (UX spec §4). */
+:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Reduced motion → state changes become instant (UX spec §4, §7.5). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Skeleton loading shimmer. */
+.skeleton {
+  background: linear-gradient(90deg, var(--c-surface2) 25%, var(--c-border) 37%, var(--c-surface2) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+  border-radius: 6px;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Search-term highlight. */
+mark {
+  background: var(--c-primary-tint);
+  color: var(--c-primary);
+  padding: 0 2px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+/* Keyboard hint chip. */
+kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  border: 1px solid var(--c-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--c-text2);
+  background: var(--c-surface);
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: var(--c-primary);
+  color: var(--c-on-primary);
+  padding: 10px 16px;
+  border-radius: 0 0 8px 0;
+  font-weight: 600;
+}
+.skip-link:focus {
+  left: 0;
+}

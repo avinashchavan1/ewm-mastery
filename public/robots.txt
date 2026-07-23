@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ewm.avinashchavan.com/sitemap.xml

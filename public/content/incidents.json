@@ -1,0 +1,715 @@
+[
+  {
+    "id": "EWM-001",
+    "number": 1,
+    "title": "Outbound Delivery Not Distributed from ERP to EWM",
+    "priority": "High",
+    "processArea": "ERP-EWM Integration",
+    "tcodes": [
+      "SMQ1",
+      "SMQ2",
+      "/SCWM/PRDO",
+      "VL02N",
+      "/SCWM/MON"
+    ],
+    "description": "Warehouse supervisor reports that outbound delivery 80004512 created in ERP is not visible in EWM warehouse monitor. Picking cannot start and the shipment is due for cutoff in 2 hours. Multiple deliveries for warehouse WH01 are affected.",
+    "systemAnalysis": [
+      "Checked /SCWM/PRDO in EWM - no outbound delivery order (ODO) exists for ERP delivery 80004512.",
+      "Checked delivery in VL02N - delivery is complete, no incompletion log, warehouse number and shipping point are correct.",
+      "Checked outbound queues in SMQ1 in ERP filtered on DLWS* - the delivery's queue (DLWS + delivery number) shows status SYSFAIL; widening the filter revealed 13 further deliveries in SYSFAIL with the identical error (EWM delivery distribution uses one qRFC queue per document).",
+      "Double-clicked the failed LUW - error text: 'Item 10: Quantity conversion from EA to PAL not possible'.",
+      "Checked material master alternative UoM - PAL conversion had been deleted by a master data change earlier that day, but the delivery still referenced it."
+    ],
+    "rootCause": "The qRFC LUWs for delivery distribution failed because the deliveries referenced an alternative unit of measure (PAL) that had been removed from the material master that morning. Since delivery distribution runs one qRFC queue per document, each affected delivery failed independently - 14 deliveries of products sharing the deleted conversion were stuck, and any follow-on message for those documents would have serialized behind the failed LUW.",
+    "resolution": [
+      "Restored the PAL conversion factor in the material master (MM02, Additional Data > Units of Measure) after confirming correct factor with master data team.",
+      "Re-triggered processing: in SMQ1 selected the failed DLWS* queues and chose Activate. All failed LUWs reprocessed successfully.",
+      "All 14 blocked deliveries flowed to EWM within 2 minutes; verified ODOs in /SCWM/PRDO and warehouse monitor.",
+      "Released the wave manually to recover picking time and informed the shift lead."
+    ],
+    "prevention": "Added a daily monitoring job for SMQ1/SMQ2 queue health with alerting, and a change-control rule that alternative UoM deletions require an open-document check first."
+  },
+  {
+    "id": "EWM-002",
+    "number": 2,
+    "title": "Putaway Warehouse Task Fails - No Storage Bin Determined",
+    "priority": "High",
+    "processArea": "Inbound / Putaway",
+    "tcodes": [
+      "/SCWM/GR",
+      "/SCWM/MON",
+      "/SCWM/BINMAT",
+      "/SCWM/LS03",
+      "SPRO"
+    ],
+    "description": "GR operator cannot create putaway warehouse tasks for inbound delivery item 20. Error raised: 'No storage bin could be determined for putaway'. Pallets are accumulating in the GR zone.",
+    "systemAnalysis": [
+      "Reproduced in /SCWM/GR - WT creation for the HU fails with the error 'No storage bin could be determined for putaway'; the WT creation log shows every candidate bin rejected.",
+      "Checked warehouse product master (/SCWM/MAT1) - putaway control indicator points to putaway strategy for storage type ST05 (narrow aisle).",
+      "Checked storage type search sequence in customizing - sequence ST05 > ST10 is assigned correctly.",
+      "Checked capacity: /SCWM/LS03 for ST05 bins showed all bins either occupied or blocked; 22 bins had a putaway block set from last week's stocktake.",
+      "Fallback storage type ST10 requires a maximum HU height of 1.2 m; the inbound HU height from packspec is 1.8 m, so capacity check rejected every bin."
+    ],
+    "rootCause": "Primary storage type had no available bins because putaway blocks from a completed physical inventory were never removed, and the fallback storage type rejected the HU on the height capacity check. The combination left zero valid bins in the search sequence.",
+    "resolution": [
+      "Mass-removed the obsolete putaway blocks for the 22 bins via the storage bin node of the warehouse monitor (select all, remove block) after confirming the PI documents were posted and closed.",
+      "Re-ran WT creation in /SCWM/GR - bins determined correctly in ST05.",
+      "Cleared the GR-zone backlog with the RF putaway transaction.",
+      "Verified the height master data on the packspec was actually correct (1.8 m) so no change was needed on the fallback type."
+    ],
+    "prevention": "Added a step to the PI closure checklist: verify no residual bin blocks remain (/SCWM/LS03 filtered on blocked bins) before declaring the count complete."
+  },
+  {
+    "id": "EWM-003",
+    "number": 3,
+    "title": "Wave Not Released Automatically at Scheduled Time",
+    "priority": "Medium",
+    "processArea": "Outbound / Wave Management",
+    "tcodes": [
+      "/SCWM/WAVE",
+      "/SCWM/WAVETMP",
+      "SM37",
+      "/SCWM/MON"
+    ],
+    "description": "The 06:00 wave for carrier route R100 was not released automatically. Warehouse floor had no picking work for 45 minutes until the shift lead released the wave manually.",
+    "systemAnalysis": [
+      "Checked /SCWM/WAVE - wave existed with correct release time 06:00 but stayed in status Initiated.",
+      "Wave template WT_R100 uses automatic release via background job.",
+      "Checked SM37 - the automatic wave release job (generated by EWM from the wave template) aborted at 05:58 with ABAP dump TSV_TNEW_PAGE_ALLOC_FAILED (memory overflow).",
+      "ST22 dump analysis showed the job was processing an unusually large wave (3,800 items) after a promotional order spike - the WT-creation input for the whole wave is built in memory at release.",
+      "Extended memory limits on the batch application server had been reduced during a recent basis reprofiling, lowering the threshold at which a large wave release fails."
+    ],
+    "rootCause": "The automatic wave release background job aborted with a memory dump: an abnormally large promotional wave exceeded the extended memory available to the batch work process, whose limits had been reduced in a recent basis reprofiling. The wave remained in Initiated status; nobody noticed until the floor ran out of work.",
+    "resolution": [
+      "Split the stuck wave into two smaller waves and released them manually in /SCWM/WAVE (Release Immediately) to restore floor work.",
+      "Basis restored the extended memory parameters on the batch server to the sizing baseline.",
+      "Set capacity limits (max items/WTs) on the wave template so promotional demand builds several right-sized waves instead of one mega-wave.",
+      "Added a 'sweeper' job at +15 minutes that alerts on any wave still in Initiated status past its release time."
+    ],
+    "prevention": "Job monitoring alert on wave release job failures plus the sweeper pattern; promotional-volume forecasts now shared with the WM support team in advance so wave capacity settings are reviewed before peaks."
+  },
+  {
+    "id": "EWM-004",
+    "number": 4,
+    "title": "Goods Issue Fails - 'Stock Data Could Not Be Determined'",
+    "priority": "Critical",
+    "processArea": "Outbound / Stock Types",
+    "tcodes": [
+      "/SCWM/PRDO",
+      "/SCWM/MON",
+      "MMBE",
+      "/SCWM/ERP_STOCKCHECK"
+    ],
+    "description": "PGI for outbound delivery order fails with a stock determination error although picking is complete and the HU is staged at the door. Truck is waiting at the dock.",
+    "systemAnalysis": [
+      "Checked ODO in /SCWM/PRDO - picking complete, staging complete, GI step fails.",
+      "Stock in EWM monitor shows stock type F2 (unrestricted, availability group 002) at the staging bin.",
+      "ERP MMBE shows the corresponding quantity in storage location AFS (staging sloc) - looks aligned at first glance.",
+      "Ran /SCWM/ERP_STOCKCHECK - found a mismatch: one HU quantity of 24 EA exists in EWM against stock type F2 but ERP shows it still in sloc ROD (availability group 001).",
+      "Traced history: a posting change WT for a stock transfer had failed to replicate to ERP two days earlier (queue error since cleared, but the message was lost after a manual queue deletion by another support colleague)."
+    ],
+    "rootCause": "A manual deletion of a failed qRFC entry (instead of correcting and reprocessing it) dropped a posting change between availability groups. EWM and ERP stock diverged, so at GI the system could not find matching ERP stock in the staging storage location.",
+    "resolution": [
+      "Aligned stock with an ERP-side corrective posting: transfer-posted 24 EA from ROD to AFS following the reconciliation SOP (a correction movement excluded from EWM distribution, so the posting does not echo back into EWM), with MM informed and the reconciliation report attached as evidence.",
+      "Re-ran /SCWM/ERP_STOCKCHECK to confirm zero differences for the product.",
+      "Posted GI successfully; truck departed with 40 minutes delay.",
+      "Coached the team: failed queue entries must never be deleted without recording the payload; correct-and-activate is the standard."
+    ],
+    "prevention": "Weekly scheduled /SCWM/ERP_STOCKCHECK run with results routed to support queue; qRFC deletion rights restricted to senior support role."
+  },
+  {
+    "id": "EWM-005",
+    "number": 5,
+    "title": "RF User Gets No Work - Resource Not Assigned to Queue",
+    "priority": "Medium",
+    "processArea": "RF / Resource Management",
+    "tcodes": [
+      "/SCWM/RFUI",
+      "/SCWM/RSRC",
+      "/SCWM/MON"
+    ],
+    "description": "A newly onboarded picker logs into RF but receives 'No warehouse order found' in system-guided picking while 60+ open warehouse orders exist for the pick area.",
+    "systemAnalysis": [
+      "Verified open WOs in /SCWM/MON for activity area PICK1 - 63 WOs in status Open, queue OUTB_PICK1.",
+      "Checked the user's resource in /SCWM/RSRC - resource exists but resource group RG_TEMP was assigned by the onboarding script.",
+      "Checked the queue sequence assigned to the resource group (resource management settings) - RG_TEMP has no queues in its sequence; RG_PICK carries OUTB_PICK1.",
+      "Other pickers with RG_PICK receive work normally, confirming queue determination is intact."
+    ],
+    "rootCause": "Onboarding automation assigned the new resource to a placeholder resource group that has no queues in its queue sequence, so system-guided work selection found no eligible queue for the resource.",
+    "resolution": [
+      "Reassigned the resource to resource group RG_PICK in /SCWM/RSRC.",
+      "User logged off/on RF; system-guided selection immediately proposed the highest priority WO from OUTB_PICK1.",
+      "Corrected the onboarding script default and audited all resources created in the last 30 days for the same issue (found 2 more, fixed)."
+    ],
+    "prevention": "Onboarding runbook updated with a mandatory verification step: after resource creation, confirm queue derivation via /SCWM/RSRC and a test RF login before handing over to operations."
+  },
+  {
+    "id": "EWM-006",
+    "number": 6,
+    "title": "HU Label Not Printing at Packing Station",
+    "priority": "Medium",
+    "processArea": "PPF / Output Management",
+    "tcodes": [
+      "/SCWM/PACK",
+      "SPPFP",
+      "SPPFCADM",
+      "SP01",
+      "/SCWM/PRHU6"
+    ],
+    "description": "Packers at work center PACK-02 report HU labels stopped printing after HU creation. Labels print fine at PACK-01. Manual reprint from spool also fails for PACK-02.",
+    "systemAnalysis": [
+      "Created a test HU at PACK-02 - PPF action HU_LABEL_PRINT shows status red in SPPFP.",
+      "Processing log: 'Output device PCK2 unknown'.",
+      "Checked printer determination: condition records map work center PACK-02 to printer PCK2.",
+      "Checked SPAD - printer PCK2 was deleted during a print-server migration the previous night; the replacement device was created as PACK2_ZBR.",
+      "PACK-01 mapping already pointed to a migrated device name, which is why it worked."
+    ],
+    "rootCause": "Print server migration renamed the output device for the packing station, but the EWM printer determination condition record still referenced the old device name, so the PPF print action failed at spool creation.",
+    "resolution": [
+      "Updated the printer determination condition record for work center PACK-02 to output device PACK2_ZBR.",
+      "Reprocessed the failed PPF actions in SPPFP (mass selection, repeat) - labels printed.",
+      "Spot-checked all EWM printer mappings against the post-migration SPAD device list and corrected 3 further stale entries (staging, GR office)."
+    ],
+    "prevention": "Print-server changes now require a joint checklist with the EWM team including a full condition-record-to-device reconciliation before cutover sign-off."
+  },
+  {
+    "id": "EWM-007",
+    "number": 7,
+    "title": "Physical Inventory Difference Posting Blocked by Tolerance",
+    "priority": "Medium",
+    "processArea": "Physical Inventory",
+    "tcodes": [
+      "/SCWM/PI_PROCESS",
+      "/SCWM/PI_DOC_C",
+      "/SCWM/DIFF_ANALYZER"
+    ],
+    "description": "Inventory controller cannot post a count difference of 480 EUR for a counted bin. Error: difference exceeds the maximum allowed value for the user. Recount already performed with same result.",
+    "systemAnalysis": [
+      "Checked the PI document in /SCWM/PI_PROCESS - count complete, difference 480 EUR pending.",
+      "Difference analyzer shows the posting requires tolerance group with limit >= 500 EUR.",
+      "User's tolerance group in customizing allows 250 EUR per difference item.",
+      "Supervisor tolerance group allows 1,000 EUR but the supervisor role was missing the difference analyzer posting authorization after a recent role redesign."
+    ],
+    "rootCause": "Two-layer issue: the counting user was correctly limited by tolerance group, but the escalation path was broken because the redesigned supervisor role lost the authorization needed to post higher-value differences in the difference analyzer.",
+    "resolution": [
+      "Security added the missing authorization to the supervisor role in the same day emergency transport.",
+      "Supervisor posted the 480 EUR difference in /SCWM/DIFF_ANALYZER; stock and ERP updated via standard integration.",
+      "Validated a regression list of all EWM authorization objects against the role redesign document."
+    ],
+    "prevention": "Role redesigns now require an EWM functional sign-off with a test catalog covering PI difference posting, WT confirmation with exceptions, and queue reprocessing."
+  },
+  {
+    "id": "EWM-008",
+    "number": 8,
+    "title": "Fixed Bin Replenishment Not Triggering for Fast Movers",
+    "priority": "High",
+    "processArea": "Internal Movements / Replenishment",
+    "tcodes": [
+      "/SCWM/REPL",
+      "SM37",
+      "/SCWM/BINMAT",
+      "/SCWM/MAT1"
+    ],
+    "description": "Pick face bins for top sellers are empty during the morning pick despite reserve stock being available. Pickers raise pick denials repeatedly.",
+    "systemAnalysis": [
+      "Checked /SCWM/BINMAT - fixed bin assignments exist for affected products; min quantity 20, max 100.",
+      "Current pick-face stock: 0. Reserve storage type has ample stock.",
+      "Checked SM37 - planned replenishment job runs at 04:30, finished OK but log shows '0 items processed'.",
+      "Job variant inspection: the variant filters on activity area PCK_A; the affected bins were moved to a new activity area PCK_B in last month's slotting reorganization.",
+      "Manual run of /SCWM/REPL for PCK_B correctly proposed replenishment WTs, confirming master data is fine."
+    ],
+    "rootCause": "A slotting reorganization created a new activity area for the fast-mover pick faces, but the planned replenishment job variant was never extended to include it, so those bins were silently excluded from every scheduled run.",
+    "resolution": [
+      "Ran replenishment manually for PCK_B and expedited the WTs through queue prioritization to refill pick faces.",
+      "Updated the job variant to select by warehouse and storage type rather than a hardcoded activity area list.",
+      "Reviewed all other scheduled EWM job variants for hardcoded organizational values and generalized 4 of them."
+    ],
+    "prevention": "Slotting/reorg checklist now includes 'review all batch job variants referencing storage types or activity areas'; variant review added to quarterly housekeeping."
+  },
+  {
+    "id": "EWM-009",
+    "number": 9,
+    "title": "Goods Receipt Fails - Availability Group Not Maintained",
+    "priority": "High",
+    "processArea": "Inbound / Configuration",
+    "tcodes": [
+      "/SCWM/PRDI",
+      "/SCWM/GR",
+      "SPRO",
+      "/SCWM/MON"
+    ],
+    "description": "GR posting for inbound deliveries into a newly opened storage location fails with 'No availability group could be determined'. Go-live of the new returns area is blocked.",
+    "systemAnalysis": [
+      "New storage type ST90 (returns) was transported to production the previous evening as part of a returns-process release.",
+      "GR into ST90 fails; GR into existing storage types works.",
+      "Checked customizing: storage type ST90 created and assigned to warehouse; availability group customizing (mapping of availability group to storage location via stock type) exists for groups 001/002.",
+      "ST90 was configured with a new availability group 005 for returns stock, but the mapping of availability group 005 to ERP storage location RET1 was missing in the production client - the entry sat in an unreleased transport."
+    ],
+    "rootCause": "Partial transport release: the storage type and its availability group assignment went to production, but the dependent customizing that maps availability group 005 to the ERP storage location remained in an unreleased transport, breaking stock type to storage location determination at GR.",
+    "resolution": [
+      "Released and imported the missing customizing transport after comparison of the full transport list for the release.",
+      "Re-posted the failed GRs successfully; stock appeared in ERP sloc RET1 as expected.",
+      "Ran a config comparison (SCU0) between QA and production for the whole returns release to confirm nothing else was missing."
+    ],
+    "prevention": "Release checklist now enforces transport-of-copies consolidation and a QA-to-production customizing comparison for EWM releases before go-live confirmation."
+  },
+  {
+    "id": "EWM-010",
+    "number": 10,
+    "title": "Unexpected Delivery Split in EWM ODO",
+    "priority": "Low",
+    "processArea": "Outbound / Delivery Processing",
+    "tcodes": [
+      "/SCWM/PRDO",
+      "SPRO"
+    ],
+    "description": "Customer service asks why one ERP delivery with 8 items arrived in EWM as two separate outbound delivery orders, causing two invoices after billing split downstream.",
+    "systemAnalysis": [
+      "Compared the two ODOs in /SCWM/PRDO - items 10-40 in ODO A, items 50-80 in ODO B.",
+      "Split criteria analysis: items differ in warehouse process type - 4 items determined ZOD1 (standard), 4 items ZOD2 (full-pallet direct).",
+      "Process type determination customizing splits documents by process type per the delivery split profile assigned to document type OUTB.",
+      "The 4 full-pallet items crossed a rounding threshold due to a recent packspec change (target quantity per pallet reduced from 48 to 40), flipping their process type to full-pallet removal."
+    ],
+    "rootCause": "A packaging specification change altered full-pallet rounding, which changed warehouse process type determination for some items; the delivery split profile then split the ODO by process type - functionally correct but commercially undesired for this customer.",
+    "resolution": [
+      "Explained the behavior chain (packspec > process type > split profile) to business stakeholders with the document trail.",
+      "Business decision: keep the split for warehouse efficiency but fix billing by activating invoice combination for this customer in ERP copy control.",
+      "Documented the packspec-to-split dependency in the solution knowledge base."
+    ],
+    "prevention": "Packspec changes for A-class customers now include an impact note on process type determination and delivery splits; monitoring report lists multi-ODO ERP deliveries daily for review."
+  },
+  {
+    "id": "EWM-011",
+    "number": 11,
+    "title": "Warehouse Order Creation Rule Producing Oversized Pick Orders",
+    "priority": "Medium",
+    "processArea": "Outbound / WOCR",
+    "tcodes": [
+      "/SCWM/WOCR",
+      "/SCWM/MON",
+      "/SCWM/WAVE"
+    ],
+    "description": "Pickers report pick carts overflowing; some warehouse orders contain 60+ items and take over an hour, breaking the pick-pack takt and delaying wave completion.",
+    "systemAnalysis": [
+      "Sampled oversized WOs in the monitor - all created by warehouse order creation rule ZWCR_CART.",
+      "Rule limits: max items 25, max weight 120 kg, max volume 0.4 m3 - looks correct in /SCWM/WOCR.",
+      "Noticed the oversized WOs all came from the late wave that includes bulky promotional items with missing weight/volume in the warehouse product master.",
+      "With zero weight/volume, the limit checks pass trivially and only the item cap should apply; found the rule sequence put ZWCR_REST (a catch-all rule with item limit 999) before ZWCR_CART for the promo process type due to a recent transport."
+    ],
+    "rootCause": "Two combined issues: promotional items were created without weight/volume master data, and a transport reordered the WOCR search sequence so a catch-all rule with practically no limits matched first for the promo process type.",
+    "resolution": [
+      "Corrected the WOCR search sequence so ZWCR_CART applies to the promo process type; catch-all remains last as designed.",
+      "Master data team backfilled weight/volume for 58 promo SKUs (mass maintenance).",
+      "Re-waved the remaining promo orders; WO sizes returned to <= 25 items and takt recovered."
+    ],
+    "prevention": "Master data quality report now blocks activation of new SKUs without weight/volume for conveyable ranges; WOCR sequence changes require floor-test evidence in the transport documentation."
+  },
+  {
+    "id": "EWM-012",
+    "number": 12,
+    "title": "Batch Not Known in EWM - CIF Class Transfer Issue",
+    "priority": "High",
+    "processArea": "Master Data / CIF",
+    "tcodes": [
+      "CFM1",
+      "CFM2",
+      "SMQ2",
+      "/SCWM/MAT1",
+      "MSC3N"
+    ],
+    "description": "Inbound delivery for a batch-managed product cannot be processed in EWM; error indicates the batch does not exist in EWM although it exists in ERP (MSC3N).",
+    "systemAnalysis": [
+      "Confirmed batch exists in ERP with production date and expiry populated.",
+      "In EWM the batch master is missing for the product.",
+      "Checked SMQ2 inbound queue in EWM - queue entry for the batch failed with 'Class ZBATCH_PHARMA does not exist in target system'.",
+      "The batch class was recently extended with two new characteristics in ERP; the class/characteristics were never re-transferred via CIF to EWM (decentral setup).",
+      "CFM1/CFM2 integration model for classes/characteristics had not been regenerated since the class change."
+    ],
+    "rootCause": "In the decentralized EWM landscape, a batch class change in ERP was not followed by regeneration and activation of the CIF integration model for classes and characteristics, so batch replication failed for all batches carrying the new characteristics.",
+    "resolution": [
+      "Regenerated and activated the integration model for classes/characteristics (CFM1/CFM2), transferring the updated class to EWM.",
+      "Reprocessed the failed SMQ2 entries; batch created in EWM automatically.",
+      "Processed the waiting inbound delivery and confirmed putaway.",
+      "Swept SMQ2 for further class-related failures across other products (3 found, same fix)."
+    ],
+    "prevention": "Change process updated: any batch class or characteristic change must include CIF model regeneration as an explicit task, with a post-change replication test batch."
+  },
+  {
+    "id": "EWM-013",
+    "number": 13,
+    "title": "ERP vs EWM Stock Mismatch Found in Month-End Reconciliation",
+    "priority": "High",
+    "processArea": "Stock Reconciliation",
+    "tcodes": [
+      "/SCWM/ERP_STOCKCHECK",
+      "MB52",
+      "/SCWM/MON",
+      "SLG1"
+    ],
+    "description": "Month-end reconciliation shows 7 products with quantity differences between ERP (MB52) and EWM stock. Finance requires resolution before period close in 48 hours.",
+    "systemAnalysis": [
+      "Ran /SCWM/ERP_STOCKCHECK with detailed output - 7 products, net differences ranging from 2 to 36 EA.",
+      "Grouped by pattern: 5 products show EWM > ERP in staging area stock; 2 show ERP > EWM in returns.",
+      "Cross-checked SLG1 application log around the difference creation dates - found goods movement IDocs / queue entries that ended in error status during a 20-minute ERP downtime for kernel patching two weeks prior.",
+      "The middleware retry exhausted attempts during the outage window; errors were never reprocessed because the alert email distribution list contained a deactivated mailbox."
+    ],
+    "rootCause": "Goods movement messages from EWM to ERP failed during a planned ERP downtime; automatic retries expired inside the outage window and the failure alerts went to a dead mailbox, so movements were never reposted, causing stock divergence.",
+    "resolution": [
+      "Reposted the lost movements on the ERP side using the queue payload evidence (quantities, slocs, movement types) with MM support - standard corrective postings, documented per product.",
+      "Re-ran /SCWM/ERP_STOCKCHECK to confirm zero differences; provided sign-off evidence to finance before close.",
+      "Fixed the alert distribution list and added a second channel (support queue ticket auto-creation) for integration failures."
+    ],
+    "prevention": "Downtime playbook updated: before any ERP maintenance window, pause EWM outbound queues cleanly; after the window, run a mandatory queue health check plus stock reconciliation for the affected period."
+  },
+  {
+    "id": "EWM-014",
+    "number": 14,
+    "title": "Serial Number Mismatch Blocks Goods Issue",
+    "priority": "High",
+    "processArea": "Outbound / Serial Numbers",
+    "tcodes": [
+      "/SCWM/PRDO",
+      "/SCWM/MON",
+      "IQ03"
+    ],
+    "description": "GI for a high-value electronics ODO fails: serial numbers confirmed at picking do not match the serial requirement check. Two of ten units are rejected.",
+    "systemAnalysis": [
+      "Checked the ODO item - serial number profile requires serials at warehouse number level with GI validation.",
+      "Compared the picked serials (serial number view in the warehouse monitor) against ERP equipment records (IQ03): two serials still show an 'in repair' system status in ERP.",
+      "History: the two units were customer returns that went through repair; the repair order was never technically completed, so the serial/equipment status was never reset to 'in stock'.",
+      "Physically the units carry passed-QC labels, confirming a status update miss rather than wrong physical picks."
+    ],
+    "rootCause": "Repair process closure in ERP did not update the serial/equipment status for two returned units, so EWM GI validation correctly rejected serials that ERP still considered to be in repair.",
+    "resolution": [
+      "Service team completed the missing repair-order operations, which set the serial status back to available.",
+      "Re-ran GI validation - passed; posted GI and shipped complete.",
+      "Identified 11 further serials in the same stuck status from the repair backlog and had them corrected proactively."
+    ],
+    "prevention": "Added a weekly exception report listing serials in repair status older than the repair SLA, reviewed jointly by service and warehouse support."
+  },
+  {
+    "id": "EWM-015",
+    "number": 15,
+    "title": "RF Error 'HU Already Assigned' When Scanning Pick-HU",
+    "priority": "Medium",
+    "processArea": "RF / Handling Units",
+    "tcodes": [
+      "/SCWM/RFUI",
+      "/SCWM/HUMO",
+      "/SCWM/MON",
+      "/SCWM/PACK"
+    ],
+    "description": "Picker scans a pick-HU barcode at the start of an order and receives 'HU 100000123 already assigned'. Fresh label taken from the printed stack at the pick station.",
+    "systemAnalysis": [
+      "Checked /SCWM/HUMO for HU 100000123 - HU exists, assigned to an open WO of another resource, created 3 days ago, no stock inside.",
+      "Interviewed the floor: label printing at the station reprints labels when the printer jams; jammed labels sometimes re-enter the stack.",
+      "The scanned label was a duplicate of an HU number already consumed by a WO that later got stuck (WO in status Waiting after its wave was locked).",
+      "Root pattern: number range reuse is not the issue - physical duplicate labels are."
+    ],
+    "rootCause": "Printer jam handling on the floor allowed duplicate physical labels of already-created HUs back into circulation; scanning a duplicate collided with the existing open HU assignment. The stuck WO holding the original HU made the collision visible.",
+    "resolution": [
+      "Unlocked and cancelled the orphaned WO, deleted the empty stale HU in /SCWM/HUMO.",
+      "Issued the picker a fresh label; order completed.",
+      "Floor procedure changed: jammed/reprinted labels must be destroyed immediately; label stacks removed in favor of print-on-demand at the station.",
+      "Ran a cleanup report for empty HUs older than 48 hours with no stock and no open document reference."
+    ],
+    "prevention": "Weekly orphaned-HU cleanup job scheduled; print-on-demand rollout for all pick stations to eliminate pre-printed stacks."
+  },
+  {
+    "id": "EWM-016",
+    "number": 16,
+    "title": "Deconsolidation Step Skipped in Process-Oriented Storage Control",
+    "priority": "High",
+    "processArea": "Inbound / POSC",
+    "tcodes": [
+      "SPRO",
+      "/SCWM/MON",
+      "/SCWM/GR",
+      "/SCWM/HUMO"
+    ],
+    "description": "Mixed inbound pallets are being sent by the system directly to final putaway instead of routing via the deconsolidation work center. Putaway of mixed HUs into single-SKU bins is causing bin data corruption risk.",
+    "systemAnalysis": [
+      "Checked the inbound HUs - mixed HUs (multiple products) with putaway WTs direct to final bins.",
+      "POSC config: process type ZIN1 assigned storage process ZSP_IN with steps GR > DECON > PUTAWAY.",
+      "Deconsolidation step determination depends on the 'relevance' logic: standard checks whether HU is mixed and whether destination activity areas differ.",
+      "New receiving clerk group used a different process type ZIN9 (manual override in /SCWM/GR) which has storage process ZSP_DIRECT without the DECON step - override was trained for single-SKU full pallets only.",
+      "Spot checks confirmed all wrongly routed HUs were received under ZIN9."
+    ],
+    "rootCause": "Human process deviation: a clerk group applied the direct-putaway process type override (designed for single-SKU full pallets) to mixed pallets, bypassing the deconsolidation step defined in the standard storage process.",
+    "resolution": [
+      "Blocked the open incorrect WTs, rerouted affected HUs to the deconsolidation work center manually, and reprocessed them correctly.",
+      "Removed the process type override option from the clerk role (screen variant + authorization) so ZIN9 can only be set by team leads.",
+      "Refresher training for the receiving team with a one-page decision guide (single-SKU full pallet vs mixed)."
+    ],
+    "prevention": "Added a validation (BAdI check) that raises an error if process type ZIN9 is used on an HU containing more than one product."
+  },
+  {
+    "id": "EWM-017",
+    "number": 17,
+    "title": "Exception Code Missing in RF - Picker Cannot Report Bin Empty",
+    "priority": "Medium",
+    "processArea": "RF / Exception Handling",
+    "tcodes": [
+      "SPRO",
+      "/SCWM/RFUI",
+      "/SCWM/MON"
+    ],
+    "description": "During picking, the RF exception key for 'bin empty / stock missing' is rejected with 'Exception code not allowed'. Pickers resort to abandoning warehouse orders, leaving tasks locked.",
+    "systemAnalysis": [
+      "Reproduced: exception code PICK-EMPTY rejected in the RF pick confirmation screen for storage type ST20.",
+      "Exception code customizing: code exists, but the assignment table (exception code per process/step/business context) lacks an entry for the internal process code and execution step used by the new ST20 flow that went live last week.",
+      "Old storage types have the full assignment matrix; the go-live copied storage type config but not the exception code context assignments."
+    ],
+    "rootCause": "New storage type flow was launched without extending the exception code determination entries (business context, internal process code, execution step) for the new step combination, so RF rejected valid exception input.",
+    "resolution": [
+      "Added the missing exception code assignments for the ST20 pick step combination in customizing and transported same day.",
+      "Verified in RF: PICK-EMPTY now triggers the follow-on action chain (source bin count activation and WT re-generation from alternative bin).",
+      "Unlocked and reassigned the abandoned WOs; stock investigation posted for two genuinely empty bins."
+    ],
+    "prevention": "Cutover template extended with 'exception code matrix' as a mandatory config completeness check per new storage type or process step."
+  },
+  {
+    "id": "EWM-018",
+    "number": 18,
+    "title": "MFS Conveyor Segment Stops - Telegrams Not Acknowledged",
+    "priority": "Critical",
+    "processArea": "MFS / Automation",
+    "tcodes": [
+      "/SCWM/MON (MFS nodes)",
+      "SM59",
+      "/SCWM/HUMO"
+    ],
+    "description": "Tote conveyor loop feeding the picking mezzanine stopped. PLC shows a healthy line; EWM MFS monitor shows telegrams queued and not acknowledged. Outbound volume dropping fast.",
+    "systemAnalysis": [
+      "Checked the MFS nodes in the warehouse monitor - communication channel CH_LOOP1 in status 'connection established' but ack counters frozen; outbound telegram queue growing (telegram table backlog rising).",
+      "SM59 RFC/PLC connection test OK at network level.",
+      "Restart evidence: PLC was rebooted by maintenance during shift change (planned quick fix for a sensor), telegram sequence numbers reset on PLC side.",
+      "EWM still expected the previous life-sign/sequence continuity; sequence mismatch caused EWM to hold telegrams awaiting an ack that would never come."
+    ],
+    "rootCause": "PLC reboot reset telegram sequence numbering without a coordinated communication-point restart on the EWM side; the MFS channel kept the stale sequence state and stopped exchanging acknowledgements.",
+    "resolution": [
+      "Performed a controlled restart of the MFS communication channel from the monitor's MFS node (stop channel, reset sequence counters, start channel) per the automation runbook.",
+      "Verified life-sign telegrams resumed, queue drained, conveyor loop restarted; cleared the physical accumulation with the automation team.",
+      "Reconciled in-flight HUs between PLC and EWM (2 totes re-inducted)."
+    ],
+    "prevention": "Maintenance SOP updated: any PLC restart requires a coordinated MFS channel restart with the EWM support team on the bridge; added an alert when ack counters freeze for more than 60 seconds while the queue grows."
+  },
+  {
+    "id": "EWM-019",
+    "number": 19,
+    "title": "Severe Performance Degradation in Warehouse Monitor and RF",
+    "priority": "High",
+    "processArea": "Performance / Basis",
+    "tcodes": [
+      "/SCWM/MON",
+      "ST12",
+      "SM66",
+      "DB02",
+      "SARA"
+    ],
+    "description": "All warehouse users report the monitor and RF confirmations taking 10-20 seconds. Worst during wave release. Started gradually, now impacting throughput KPIs.",
+    "systemAnalysis": [
+      "ST12 trace on RF confirmation - dominant time in selects on WT/WO tables with historical document volumes.",
+      "DB02: document tables grew far beyond sizing assumptions; no archiving ever executed since go-live 3 years ago.",
+      "Statistics on two heavily used tables were stale after a large deletion attempt by a previous consultant; optimizer chose poor plans.",
+      "Additional finding: a custom Z-monitor variant executed by 15 users auto-refreshing every 30 seconds with an unrestricted date range."
+    ],
+    "rootCause": "Compound cause: multi-year unarchived document growth, stale database statistics producing bad execution plans, and an unrestricted auto-refreshing custom monitor variant multiplying expensive full-range reads.",
+    "resolution": [
+      "Basis refreshed optimizer statistics for the affected tables - immediate large improvement on RF response.",
+      "Implemented the EWM archiving concept (completed WTs/WOs and delivery documents beyond retention) with SARA objects, phased over weekends.",
+      "Restricted the Z-monitor variant to a rolling 24-hour window and reduced auto-refresh to 5 minutes; educated the users.",
+      "Established monthly volume monitoring against sizing thresholds."
+    ],
+    "prevention": "Archiving now a scheduled operational process with quarterly review; performance guardrails documented (variant date restrictions, refresh policies) and enforced via variant authorization."
+  },
+  {
+    "id": "EWM-020",
+    "number": 20,
+    "title": "Bins Blocked by Orphaned Open Warehouse Tasks",
+    "priority": "Medium",
+    "processArea": "Internal / Housekeeping",
+    "tcodes": [
+      "/SCWM/MON",
+      "/SCWM/CANCPICK",
+      "/SCWM/LS03"
+    ],
+    "description": "Putaway proposals keep skipping prime bins. Investigation shows dozens of bins with open WTs dated weeks ago that nobody can confirm - the referenced HUs no longer physically exist at source.",
+    "systemAnalysis": [
+      "Monitor query: 47 open product WTs older than 14 days across reserve storage types.",
+      "Pattern A (31 tasks): created by an interface-driven rearrangement project that was cancelled mid-execution; physical moves never happened.",
+      "Pattern B (16 tasks): RF users abandoned tasks on device crashes; stock later moved with ad-hoc WTs, leaving originals pointing at empty sources.",
+      "Bins with open destination WTs are considered occupied/reserved by capacity checks, distorting putaway determination."
+    ],
+    "rootCause": "No routine housekeeping existed for aged open warehouse tasks; cancelled project tasks and crash-orphaned tasks accumulated, reserving destination capacity and skewing putaway strategy results.",
+    "resolution": [
+      "Validated each aged WT with the floor, then mass-cancelled the 47 confirmed-dead tasks via the warehouse monitor's cancel function (pick-related ones via /SCWM/CANCPICK), with a documented evidence sheet.",
+      "Re-ran putaway simulations - prime bins proposed correctly again.",
+      "Corrected two real stock discrepancies discovered during validation through ad-hoc PI."
+    ],
+    "prevention": "Weekly aged-open-WT report (threshold 3 days) added to the support operations calendar with a documented cancel/confirm decision procedure."
+  },
+  {
+    "id": "EWM-021",
+    "number": 21,
+    "title": "Kit-to-Order Not Exploding - Kit Shipped Incomplete Risk",
+    "priority": "High",
+    "processArea": "Outbound / Kitting & VAS",
+    "tcodes": [
+      "/SCWM/PRDO",
+      "SPRO",
+      "/SCWM/MON",
+      "/SCWM/VASEXEC"
+    ],
+    "description": "Sales orders for kit KIT-100 arrive in EWM as a single header item without component explosion; picking proposes the (non-stocked) kit header product and fails to find stock.",
+    "systemAnalysis": [
+      "Checked the ODO - single item for KIT-100, no component items, no VAS order generated.",
+      "Kit master data: kit BOM exists in ERP; in EWM the kit information must arrive with the delivery (ERP-side explosion for lean scenarios) or via kit definition depending on scenario design - this warehouse uses ERP delivery-based kit info.",
+      "Compared with a working kit: working deliveries carry kit item hierarchy (higher-level item references); failing ones do not.",
+      "Difference isolation: failing orders came through a new e-commerce order channel that creates deliveries via a custom interface which drops the item hierarchy fields."
+    ],
+    "rootCause": "A new order channel's custom delivery-creation interface did not populate the kit item hierarchy (higher-level item relationships), so EWM received flat items and could not treat the delivery as a kit-to-order with components.",
+    "resolution": [
+      "Interface team fixed the mapping to populate the higher-level item and item category fields identically to standard channel deliveries.",
+      "Reprocessed affected orders by regenerating deliveries; EWM created proper kit structures and VAS work.",
+      "Blocked the affected undelivered orders until refresh to prevent incomplete shipments; audited shipped orders (2 shipped incomplete - customer service initiated recovery)."
+    ],
+    "prevention": "Interface contract tests extended with a kit-order test case in the regression suite; monitoring report flags ODOs for known kit headers arriving without components."
+  },
+  {
+    "id": "EWM-022",
+    "number": 22,
+    "title": "Truck Check-In Fails - No Door Determined for Transportation Unit",
+    "priority": "Medium",
+    "processArea": "Yard / Shipping & Receiving",
+    "tcodes": [
+      "/SCWM/CICO",
+      "/SCWM/YMOVE",
+      "SPRO",
+      "/SCWM/MON"
+    ],
+    "description": "Gate clerk cannot check in an arriving truck: transportation unit gets no door/parking assignment for the new refrigerated dock area, trucks queue at the gate.",
+    "systemAnalysis": [
+      "Reproduced in /SCWM/CICO for TU with door requirement type COLD.",
+      "Yard config: new cold-chain doors D21/D22 exist as door master data and as yard bins.",
+      "Door determination uses staging area/door determination groups: deliveries for cold products carry determination group COLD, but doors D21/D22 were not added to the mapping table for the COLD group in production (present in QA).",
+      "Standard doors correctly excluded due to temperature requirement, so determination returned nothing."
+    ],
+    "rootCause": "Go-live gap: new cold-chain doors were created as master data, but the staging area/door determination customizing mapping the COLD determination group to the new doors was not transported to production.",
+    "resolution": [
+      "Imported the missing customizing entry; door determination immediately proposed D21/D22.",
+      "Checked in queued trucks and processed yard moves; unloading recovered within the hour.",
+      "Compared full QA vs production delta for the cold-chain release scope."
+    ],
+    "prevention": "Cutover verification scripts now include an end-to-end check-in test in production during hypercare window for every new dock/door commissioning."
+  },
+  {
+    "id": "EWM-023",
+    "number": 23,
+    "title": "Stock Stuck in Quality - Inspection Lot Not Created",
+    "priority": "High",
+    "processArea": "Quality Management Integration",
+    "tcodes": [
+      "/SCWM/PRDI",
+      "QA33",
+      "/SCWM/QIDPR",
+      "SLG1"
+    ],
+    "description": "GR-posted stock for a QM-relevant product remains in stock type Q4 with no inspection lot in ERP; quality team cannot record results and stock cannot be released for sale.",
+    "systemAnalysis": [
+      "Confirmed EWM stock in quality inspection stock type; /SCWM/QIDPR shows an inspection document in status 'error'.",
+      "SLG1 log: inspection lot creation call to ERP failed - 'Inspection type 01 not active for material'.",
+      "Material master QM view: inspection setup existed but a recent mass change (intended to switch inspection types) deactivated type 01 before the replacement type 08 was activated - a sequencing error in the mass-change batch.",
+      "GRs performed inside the gap window created stock in Q without lots."
+    ],
+    "rootCause": "A QM master data mass change deactivated the old inspection type before activating the new one; goods receipts during the gap could not create inspection lots, stranding stock in quality inspection without a QM document.",
+    "resolution": [
+      "QM completed the mass change correctly (type 08 active).",
+      "Reprocessed the errored quality inspection documents so lots were created against the now-active inspection type.",
+      "Quality recorded results; usage decisions posted; stock moved to unrestricted via standard posting change flow.",
+      "Verified all products touched by the mass change window for the same symptom."
+    ],
+    "prevention": "QM mass changes now run activate-new-before-deactivate-old, and a post-change report checks for Q-stock without corresponding inspection documents."
+  },
+  {
+    "id": "EWM-024",
+    "number": 24,
+    "title": "Pick Denial Spike - Stock Removal Strategy Proposing Wrong Bins",
+    "priority": "High",
+    "processArea": "Outbound / Stock Removal",
+    "tcodes": [
+      "/SCWM/MON",
+      "SPRO",
+      "/SCWM/LS03",
+      "/SCWM/MAT1"
+    ],
+    "description": "Pick denial rate jumped from 0.4% to 6% overnight. Pickers report being sent to bins holding a different product than requested.",
+    "systemAnalysis": [
+      "Sampled denials: WTs point to bins whose physical content differs from book content - but only for one storage type ST30.",
+      "ST30 went through a bin re-labelling project the previous weekend (racking reconfiguration).",
+      "Comparison of old vs new label maps revealed one full aisle (36 bins) where the physical label sequence was applied in reverse order versus the system bin coordinates.",
+      "Book stock was 'moved' logically to the new bin codes by the project via posting changes, assuming labels matched the map."
+    ],
+    "rootCause": "Physical re-labelling error: one aisle's new bin labels were applied in reverse sequence, so logical stock transfers during the reconfiguration mapped stock to the mirror-image bins. The removal strategy then directed pickers to systematically wrong physical locations.",
+    "resolution": [
+      "Froze picking for the affected aisle (bin block with reason code) to stop further denials.",
+      "Corrected by re-mapping: physical relabel of the 36 bins in correct sequence (chosen over 36 stock reposts to keep audit trail simple), then removed blocks.",
+      "Cleared the denial backlog: reprocessed failed WTs; adjusted the two genuine discrepancies found via ad-hoc count.",
+      "Denial rate returned to baseline the next day."
+    ],
+    "prevention": "Relabelling projects now require a scan-verification pass (scan bin label vs expected coordinate report) for every bin before stock is logically transferred, plus a sample pick test before go-live."
+  },
+  {
+    "id": "EWM-025",
+    "number": 25,
+    "title": "Pick Lists Printing at Wrong Printer After Zone Change",
+    "priority": "Low",
+    "processArea": "Output / Printing",
+    "tcodes": [
+      "/SCWM/PRWO6",
+      "SPPFP",
+      "SPAD",
+      "SPRO"
+    ],
+    "description": "After a pick-zone reorganization, WO pick lists for zone B print at the old zone-A printer across the building, causing delays and lost paper lists.",
+    "systemAnalysis": [
+      "Print determination for WO documents resolves the printer via condition records on activity area.",
+      "Zone reorg moved 40 bins from activity area AA_A to AA_B, but the condition record priority: a more specific record (activity area + queue) still existed for the old queue value and won against the new AA_B record.",
+      "The reorganized bins kept their old queue in WOCR determination due to a second missed config update, reinforcing the wrong printer choice."
+    ],
+    "rootCause": "Incomplete reorganization: queue determination for moved bins was not updated, and a stale, more-specific printer condition record (area+queue) overrode the intended new mapping, routing output to the old zone printer.",
+    "resolution": [
+      "Updated queue determination for the moved bins to the zone-B queue.",
+      "Deleted the stale specific condition record and rebuilt the intended mapping in the WO print condition records (/SCWM/PRWO6), then validated determination with test prints for representative WOs.",
+      "Reprinted active lists to the correct printer."
+    ],
+    "prevention": "Zone-move checklist expanded: queues, printer condition records, and staging determinations reviewed together; simulation evidence attached to the change record."
+  },
+  {
+    "id": "EWM-026",
+    "number": 26,
+    "title": "Delivery Stuck After GR Reversal Request from Business",
+    "priority": "Medium",
+    "processArea": "Inbound / Corrections",
+    "tcodes": [
+      "/SCWM/PRDI",
+      "/SCWM/GR",
+      "/SCWM/MON"
+    ],
+    "description": "Receiving posted GR against the wrong inbound delivery (vendor shipped partial). Business requests reversal, but putaway WTs are already confirmed and stock partially moved to reserve bins.",
+    "systemAnalysis": [
+      "Assessed document state: GR posted, 6 of 8 HUs putaway-confirmed to final bins, 2 HUs still in GR-zone.",
+      "Straight GR reversal in EWM requires the stock to be back in the GR-relevant state; confirmed WTs must be handled first.",
+      "Options evaluated: (a) full reversal - move stock back, reverse GR, correct delivery; (b) keep stock, adjust delivery quantities via correction; business needed the delivery to reflect the true shipped quantity for vendor liability, so full accuracy required.",
+      "Chose controlled reversal path with documented steps and finance alignment."
+    ],
+    "rootCause": "User error at receiving: GR was posted against the wrong (fully expected) inbound delivery instead of capturing the actual partial quantity, compounded by rapid putaway confirmation that moved stock away from the GR zone before the error was noticed.",
+    "resolution": [
+      "Created ad-hoc WTs to bring the 6 putaway HUs back to the GR zone; confirmed physical returns.",
+      "Reversed the goods receipt for the delivery in EWM (GR reversal), which synchronized the reversal to ERP.",
+      "Adjusted the inbound delivery to the actually received quantities and re-posted GR; putaway executed again for correct stock.",
+      "Vendor claim raised by procurement using the corrected documents."
+    ],
+    "prevention": "Receiving SOP updated: partial-shipment verification (line count vs ASN) before GR posting; a short putaway hold (30 min) configured for deliveries flagged with quantity discrepancies."
+  }
+]

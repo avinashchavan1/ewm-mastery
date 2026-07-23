@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EWM Mastery — Free SAP EWM Support &amp; Interview Prep</title>
+    <meta
+      name="description"
+      content="Free, offline SAP EWM prep: 26 real support incident runbooks, 21 study days, 630 interview questions &amp; answers, flashcards, quizzes and governance templates. No login."
+    />
+    <meta name="author" content="Avinash Chavan" />
+    <meta name="keywords" content="SAP EWM, Extended Warehouse Management, EWM interview questions, EWM support, EWM incidents, S/4HANA EWM, warehouse management, EWM tutorial" />
+    <link rel="canonical" href="https://ewm.avinashchavan.com/" />
+    <meta name="theme-color" content="#1F4E79" />
+    <meta name="robots" content="index, follow" />
+    <!-- Google Search Console: paste token to verify via HTML-tag method -->
+    <!-- <meta name="google-site-verification" content="PASTE_TOKEN_HERE" /> -->
+
+    <!-- Open Graph / Twitter (defaults; per-route values set at runtime) -->
+    <meta property="og:site_name" content="EWM Mastery" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="EWM Mastery — Free SAP EWM Support &amp; Interview Prep" />
+    <meta property="og:description" content="26 real SAP EWM support incident runbooks, 630 interview Q&amp;A, flashcards, quizzes and templates. Free, offline, no login." />
+    <meta property="og:url" content="https://ewm.avinashchavan.com/" />
+    <meta property="og:image" content="https://ewm.avinashchavan.com/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="EWM Mastery — Free SAP EWM Support &amp; Interview Prep" />
+    <meta name="twitter:description" content="26 SAP EWM incident runbooks, 630 interview Q&amp;A, flashcards &amp; quizzes. Free, offline, no login." />
+    <meta name="twitter:image" content="https://ewm.avinashchavan.com/og-image.png" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <script>
+      // Apply persisted theme before first paint to avoid a flash.
+      (function () {
+        try {
+          var t = localStorage.getItem('ewm.theme') || 'system';
+          var dark =
+            t === 'dark' ||
+            (t === 'system' &&
+              window.matchMedia &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        } catch (e) {
+          document.documentElement.dataset.theme = 'light';
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

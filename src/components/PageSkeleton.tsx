@@ -1,0 +1,21 @@
+import { Skeleton } from './primitives';
+
+// Slim skeleton shown while a lazy route chunk or JSON is loading.
+export function PageSkeleton() {
+  return (
+    <div className="mx-auto max-w-shell px-4 py-9 sm:px-6" aria-busy="true" aria-label="Loading">
+      <Skeleton className="mb-3 h-8 w-64" />
+      <Skeleton className="mb-8 h-4 w-96 max-w-full" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-20" />
+        ))}
+      </div>
+      <div className="mt-6 flex flex-col gap-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-16" />
+        ))}
+      </div>
+    </div>
+  );
+}

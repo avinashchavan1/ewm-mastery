@@ -1,0 +1,3 @@
+# SPA fallback — every path serves the app; client router handles it.
+# Real asset/content/template requests hit first (Netlify matches files before rules).
+/*    /index.html    200

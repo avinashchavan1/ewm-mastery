@@ -1,0 +1,43 @@
+{
+  "product": "EWM Bundle - Support Tickets/Incidents + Interview Q&A",
+  "author": "Avinash Chavan",
+  "version": "1.1",
+  "generated": "2026-07-23",
+  "incidents": 26,
+  "days": 21,
+  "totalQuestions": 630,
+  "processAreas": [
+    "ERP-EWM Integration",
+    "Inbound / Putaway",
+    "Outbound / Wave Management",
+    "Outbound / Stock Types",
+    "RF / Resource Management",
+    "PPF / Output Management",
+    "Physical Inventory",
+    "Internal Movements / Replenishment",
+    "Inbound / Configuration",
+    "Outbound / Delivery Processing",
+    "Outbound / WOCR",
+    "Master Data / CIF",
+    "Stock Reconciliation",
+    "Outbound / Serial Numbers",
+    "RF / Handling Units",
+    "Inbound / POSC",
+    "RF / Exception Handling",
+    "MFS / Automation",
+    "Performance / Basis",
+    "Internal / Housekeeping",
+    "Outbound / Kitting & VAS",
+    "Yard / Shipping & Receiving",
+    "Quality Management Integration",
+    "Outbound / Stock Removal",
+    "Output / Printing",
+    "Inbound / Corrections"
+  ],
+  "priorities": [
+    "Critical",
+    "High",
+    "Medium",
+    "Low"
+  ]
+}
